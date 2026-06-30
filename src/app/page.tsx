@@ -1,177 +1,243 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, ChevronRight, Loader2, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Loader2, ShieldCheck, Volume2, VolumeX, AlertCircle, ShoppingCart } from "lucide-react";
+import { toast } from "sonner";
+import { useAudioFeedback } from "@/hooks/use-audio-feedback";
+import { B2cCourseStrategy } from "@/components/checkout-strategies/b2c-course-strategy";
+import { B2bPackageStrategy } from "@/components/checkout-strategies/b2b-package-strategy";
+import { AuctionPaymentStrategy } from "@/components/checkout-strategies/auction-payment-strategy";
+import { Button } from "@/components/ui/button";
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const searchParams = useSearchParams();
   const type = searchParams.get("type");
   const id = searchParams.get("id");
+
+  const { isMuted, toggleMute, initAudio, playSuccess, playError } = useAudioFeedback();
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [context, setContext] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [transaction, setTransaction] = useState<any>(null);
 
   useEffect(() => {
-    // Dans un cas réel, appel vers l'API /api/checkout/context?type=...
-    if (type && id) {
-      setTimeout(() => {
-        setContext({
-          title: "Package Entreprise - 10 Licences",
-          price: 499.0,
-          currency: "EUR",
-          features: [
-            "Accès illimité pour 10 collaborateurs",
-            "Dashboard de suivi B2B",
-            "Support prioritaire",
-          ],
-        });
-        setLoading(false);
-      }, 1500);
-    } else {
-      setError("URL invalide. Type ou ID manquant.");
+    if (!type || !id) {
+      setError("Les paramètres de la commande sont manquants (type ou id).");
       setLoading(false);
+      return;
     }
+
+    const fetchContext = async () => {
+      try {
+        setLoading(true);
+        const aggUrl = process.env.NEXT_PUBLIC_AGGREGATOR_URL || "http://localhost:3000";
+        const res = await fetch(`${aggUrl}/api/checkout/context?type=${type}&id=${id}`);
+        
+        if (!res.ok) {
+          throw new Error("Impossible de récupérer les détails de la commande. L'article n'existe pas ou a expiré.");
+        }
+        
+        const json = await res.json();
+        if (json.success && json.data) {
+          setContext(json.data);
+        } else {
+          throw new Error("Données reçues invalides.");
+        }
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message || "Une erreur inattendue s'est produite lors de la connexion à l'agrégateur.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContext();
   }, [type, id]);
 
-  const nextStep = () => setStep((s) => Math.min(s + 1, 3));
-  const prevStep = () => setStep((s) => Math.max(s - 1, 1));
+  const handleFormSuccess = async (formData: any) => {
+    try {
+      const aggUrl = process.env.NEXT_PUBLIC_AGGREGATOR_URL || "http://localhost:3000";
+      const res = await fetch(`${aggUrl}/api/checkout/process`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ type, data: { itemId: id, ...formData } })
+      });
+
+      if (!res.ok) {
+        throw new Error("Erreur lors de l'initialisation du paiement.");
+      }
+
+      const json = await res.json();
+      if (json.success) {
+        setTransaction(json.data);
+        playSuccess();
+        toast.success("Informations enregistrées.", {
+          description: "Redirection vers le portail de paiement sécurisé..."
+        });
+        setStep(3);
+      } else {
+        throw new Error(json.message || "Erreur de traitement.");
+      }
+    } catch (err: any) {
+      playError();
+      toast.error("Erreur", { description: err.message });
+    }
+  };
+
+  const renderStrategy = () => {
+    if (type?.startsWith("B2B")) {
+      return <B2bPackageStrategy playClick={() => {}} onSuccess={handleFormSuccess} />;
+    }
+    if (type === "AUCTION_PAYMENT") {
+      return <AuctionPaymentStrategy playClick={() => {}} onSuccess={handleFormSuccess} />;
+    }
+    return <B2cCourseStrategy playClick={() => {}} onSuccess={handleFormSuccess} />;
+  };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50/50">
+        <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white p-8 rounded-2xl shadow-sm text-center">
-          <p className="text-red-500 font-medium">{error}</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50/50 p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-sm text-center max-w-md border border-gray-100">
+          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertCircle className="w-8 h-8 text-red-500" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Commande introuvable</h2>
+          <p className="text-gray-500 font-medium mb-6">{error}</p>
+          <Button onClick={() => window.location.reload()} variant="outline" className="w-full">
+            Réessayer
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!context) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50/50 p-4">
+         <div className="bg-white p-8 rounded-3xl shadow-sm text-center max-w-md border border-gray-100">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <ShoppingCart className="w-8 h-8 text-gray-400" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Panier vide</h2>
+          <p className="text-gray-500 font-medium">Aucune information n'est disponible pour cette session.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
-      {/* Header façon Stripe */}
-      <header className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
-        <div className="font-bold text-xl tracking-tight flex items-center gap-2">
-          <div className="w-6 h-6 bg-blue-600 rounded-md"></div>
-          Studies Learning
+    <div className="min-h-screen bg-gray-50 text-gray-900 font-sans" onPointerDown={initAudio}>
+      {/* Header Premium */}
+      <header className="bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+        <div className="flex items-center gap-3">
+          <div className="relative w-10 h-10">
+            <Image 
+              src="/logo.png" 
+              alt="Studies Learning Logo" 
+              fill 
+              className="object-contain"
+              priority
+            />
+          </div>
+          <span className="font-bold text-xl tracking-tight hidden sm:inline-block bg-clip-text text-transparent bg-gradient-to-r from-indigo-900 to-indigo-600">
+            Studies Learning
+          </span>
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
-          <ShieldCheck className="w-4 h-4 text-green-500" />
-          Paiement sécurisé
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={toggleMute}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+            title={isMuted ? "Activer le son" : "Désactiver le son"}
+          >
+            {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+          </button>
+          <div className="hidden sm:flex items-center gap-2 text-sm text-green-700 bg-green-50 px-3 py-1.5 rounded-full font-medium border border-green-100">
+            <ShieldCheck className="w-4 h-4" />
+            Paiement sécurisé
+          </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-12 flex flex-col md:flex-row gap-12">
-        {/* Left Column: Form */}
+      <main className="max-w-6xl mx-auto px-4 py-8 md:py-12 flex flex-col-reverse lg:flex-row gap-8 lg:gap-16">
+        
+        {/* Colonne Principale : Formulaire Adaptatif */}
         <div className="flex-1">
-          {/* Stepper */}
-          <div className="flex items-center gap-2 mb-8 text-sm font-medium">
-            <span className={step >= 1 ? "text-blue-600" : "text-gray-400"}>1. Identification</span>
-            <ChevronRight className="w-4 h-4 text-gray-300" />
-            <span className={step >= 2 ? "text-blue-600" : "text-gray-400"}>2. Options</span>
-            <ChevronRight className="w-4 h-4 text-gray-300" />
-            <span className={step >= 3 ? "text-blue-600" : "text-gray-400"}>3. Paiement</span>
+          {/* Stepper Dynamique */}
+          <div className="flex items-center gap-3 mb-10 overflow-x-auto pb-2">
+            <div className={`flex items-center gap-2 whitespace-nowrap ${step >= 1 ? "text-indigo-600" : "text-gray-400"}`}>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step >= 1 ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-500"}`}>1</div>
+              <span className="font-medium text-sm">Identification</span>
+            </div>
+            <div className="h-px w-8 sm:w-12 bg-gray-200 shrink-0" />
+            <div className={`flex items-center gap-2 whitespace-nowrap ${step >= 3 ? "text-indigo-600" : "text-gray-400"}`}>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step >= 3 ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-500"}`}>2</div>
+              <span className="font-medium text-sm">Règlement sécurisé</span>
+            </div>
           </div>
 
-          <div className="relative overflow-hidden min-h-[400px]">
+          <div className="relative">
             <AnimatePresence mode="wait">
               {step === 1 && (
                 <motion.div
-                  key="step1"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
+                  key="form-strategy"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
-                  className="space-y-6"
                 >
-                  <h2 className="text-2xl font-bold">Vos informations</h2>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Email professionnel</label>
-                      <input type="email" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all" placeholder="marc@entreprise.com" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Prénom</label>
-                        <input type="text" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Marc" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Nom</label>
-                        <input type="text" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Dupont" />
-                      </div>
-                    </div>
-                  </div>
-                  <button onClick={nextStep} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors shadow-sm shadow-blue-200">
-                    Continuer
-                  </button>
-                </motion.div>
-              )}
-
-              {step === 2 && (
-                <motion.div
-                  key="step2"
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.3 }}
-                  className="space-y-6"
-                >
-                  <h2 className="text-2xl font-bold">Options d'entreprise</h2>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Nom de l'entreprise</label>
-                      <input type="text" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Acme Corp" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Numéro de TVA (Optionnel)</label>
-                      <input type="text" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="FR XX XXX XXX XXX" />
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <button onClick={prevStep} className="px-6 py-4 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-colors">
-                      Retour
-                    </button>
-                    <button onClick={nextStep} className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors shadow-sm shadow-blue-200">
-                      Passer au paiement
-                    </button>
-                  </div>
+                  {renderStrategy()}
                 </motion.div>
               )}
 
               {step === 3 && (
                 <motion.div
-                  key="step3"
+                  key="payment-step"
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
                   className="space-y-6"
                 >
-                  <h2 className="text-2xl font-bold">Paiement</h2>
-                  <div className="p-6 border border-gray-200 rounded-2xl bg-white shadow-sm flex items-center justify-center min-h-[200px]">
-                    <p className="text-gray-500 text-sm text-center">
-                      Le widget CinetPay / Stripe sera injecté ici.<br />
-                      Une fois payé, la Saga {type} sera déclenchée.
+                  <h2 className="text-2xl font-bold">Règlement via {transaction?.provider || "PSP"}</h2>
+                  <div className="p-8 border-2 border-dashed border-gray-200 rounded-3xl bg-white shadow-sm flex flex-col items-center justify-center min-h-[300px]">
+                    <ShieldCheck className="w-12 h-12 text-gray-300 mb-4" />
+                    <p className="text-gray-500 text-center font-medium max-w-sm mb-4">
+                      Saga de paiement initiée : <br/>
+                      <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded mt-2 inline-block text-gray-700">{transaction?.transactionId}</span>
+                    </p>
+                    <p className="text-sm text-gray-400 text-center px-4">
+                      L'intégration CinetPay / Stripe s'affichera ici en toute sécurité. En production, un SDK sera monté.
                     </p>
                   </div>
-                  <div className="flex gap-4">
-                    <button onClick={prevStep} className="px-6 py-4 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-colors">
-                      Modifier infos
-                    </button>
-                    <button className="flex-1 py-4 bg-black hover:bg-gray-800 text-white rounded-xl font-medium transition-colors shadow-lg">
-                      Payer {context?.price} {context?.currency}
-                    </button>
+                  <div className="flex gap-4 pt-4">
+                    <Button variant="ghost" onClick={() => setStep(1)} className="text-gray-500">
+                      Modifier mes infos
+                    </Button>
+                    <Button 
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-700" 
+                      size="lg" 
+                      onClick={() => {
+                        playSuccess();
+                        toast.success("Simulation : Redirection vers le fournisseur de paiement.");
+                      }}
+                    >
+                      Procéder au paiement ({context.price} {context.currency})
+                    </Button>
                   </div>
                 </motion.div>
               )}
@@ -179,36 +245,49 @@ export default function CheckoutPage() {
           </div>
         </div>
 
-        {/* Right Column: Summary */}
-        <div className="w-full md:w-96">
-          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 sticky top-24">
-            <h3 className="font-semibold text-lg mb-4">Résumé de la commande</h3>
+        {/* Colonne Latérale : Résumé */}
+        <div className="w-full lg:w-[380px] shrink-0">
+          <div className="bg-white p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100/60 lg:sticky lg:top-24 mb-8 lg:mb-0">
+            <h3 className="font-semibold text-lg mb-6 text-gray-900">Résumé</h3>
             
             <div className="flex justify-between items-start mb-6 pb-6 border-b border-gray-100">
-              <div>
-                <p className="font-medium text-gray-900">{context?.title}</p>
-                <p className="text-sm text-gray-500 mt-1">Accès instantané</p>
+              <div className="pr-4">
+                <p className="font-medium text-gray-900 leading-tight">{context.title}</p>
               </div>
-              <span className="font-semibold text-lg">{context?.price} €</span>
+              <span className="font-bold text-xl whitespace-nowrap">{context.price} {context.currency}</span>
             </div>
 
-            <div className="space-y-3 mb-8">
-              {context?.features.map((feat: string, i: number) => (
-                <div key={i} className="flex items-start gap-3 text-sm text-gray-600">
-                  <CheckCircle2 className="w-5 h-5 text-blue-500 shrink-0" />
-                  <span>{feat}</span>
-                </div>
-              ))}
-            </div>
+            {context.features && context.features.length > 0 && (
+              <div className="space-y-4 mb-8">
+                {context.features.map((feat: string, i: number) => (
+                  <div key={i} className="flex items-start gap-3 text-sm text-gray-600">
+                    <CheckCircle2 className="w-5 h-5 text-indigo-500 shrink-0" />
+                    <span className="leading-snug">{feat}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
-            <div className="flex justify-between items-center pt-4 border-t border-gray-100 font-bold text-xl">
-              <span>Total</span>
-              <span>{context?.price} €</span>
+            <div className="flex justify-between items-center pt-6 border-t border-gray-100 font-bold text-xl">
+              <span>Total à payer</span>
+              <span>{context.price} {context.currency}</span>
             </div>
-            <p className="text-xs text-gray-400 text-right mt-1">TVA incluse si applicable</p>
+            <p className="text-xs text-gray-400 text-right mt-2 font-medium">TVA incluse si applicable</p>
           </div>
         </div>
       </main>
     </div>
+  );
+}
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      </div>
+    }>
+      <CheckoutContent />
+    </Suspense>
   );
 }

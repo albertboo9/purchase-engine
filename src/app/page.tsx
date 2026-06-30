@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useAudioFeedback } from "@/hooks/use-audio-feedback";
 import { B2cCourseStrategy } from "@/components/checkout-strategies/b2c-course-strategy";
 import { B2bPackageStrategy } from "@/components/checkout-strategies/b2b-package-strategy";
+import { B2bThematiqueStrategy } from "@/components/checkout-strategies/b2b-thematique-strategy";
 import { AuctionPaymentStrategy } from "@/components/checkout-strategies/auction-payment-strategy";
 import { Button } from "@/components/ui/button";
 
@@ -92,7 +93,10 @@ function CheckoutContent() {
   };
 
   const renderStrategy = () => {
-    if (type?.startsWith("B2B")) {
+    if (type === "B2B_THEMATIQUE") {
+      return <B2bThematiqueStrategy playClick={() => {}} onSuccess={handleFormSuccess} />;
+    }
+    if (type === "B2B_PACKAGE") {
       return <B2bPackageStrategy playClick={() => {}} onSuccess={handleFormSuccess} />;
     }
     if (type === "AUCTION_PAYMENT") {

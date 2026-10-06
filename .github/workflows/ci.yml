@@ -1,0 +1,36 @@
+name: CI
+
+# purchase-engine : passerelle de paiement unique de Studies Learning.
+# Bloquant : types TypeScript et build de production.
+# Lint : exécuté et visible, NON bloquant jusqu'à la refonte v1 du sprint 4
+# (21 erreurs héritées : `any`, apostrophes non échappées) ; à rendre bloquant en S4.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: "Types, build et lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Vérification des types
+        run: npx tsc --noEmit
+      - name: Build de production
+        run: npm run build
+      - name: Lint (non bloquant jusqu'au sprint 4)
+        continue-on-error: true
+        run: npm run lint

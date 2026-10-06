@@ -1,11 +1,14 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { BookOpen, Building2, Info } from "lucide-react";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
+import { LicenceQuantityPicker, type LicencePickerState } from "./licence-quantity-picker";
+import type { Quote } from "@/hooks/use-licence-quote";
 
 const schema = z.object({
   companyName: z.string().min(2, "Le nom de l'entreprise est requis"),
@@ -18,11 +21,26 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 interface Props {
+  type: "B2B_PACKAGE" | "B2B_THEMATIQUE";
+  itemId: string;
   onSuccess: (data: any) => void;
+  onQuoteChange?: (q: Quote | null) => void;
   playClick: () => void;
 }
 
-export function B2bThematiqueStrategy({ onSuccess, playClick }: Props) {
+export function B2bThematiqueStrategy({ type, itemId, onSuccess, onQuoteChange, playClick }: Props) {
+  const [licence, setLicence] = useState<LicencePickerState>({
+    seats: 1,
+    quote: null,
+    loading: true,
+    error: null,
+  });
+  const quote = licence.quote;
+
+  useEffect(() => {
+    onQuoteChange?.(quote);
+  }, [quote, onQuoteChange]);
+
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -36,7 +54,8 @@ export function B2bThematiqueStrategy({ onSuccess, playClick }: Props) {
 
   const onSubmit = (data: FormData) => {
     playClick();
-    onSuccess(data);
+    // Le montant est recalculé côté serveur : on transmet uniquement le nombre de licences.
+    onSuccess({ ...data, totalLicenses: quote?.seats ?? licence.seats });
   };
 
   return (
@@ -48,6 +67,8 @@ export function B2bThematiqueStrategy({ onSuccess, playClick }: Props) {
           L'email renseigné ci-dessous sera désigné comme Administrateur de cet espace.
         </p>
       </div>
+
+      <LicenceQuantityPicker type={type} itemId={itemId} onChange={setLicence} />
 
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-gray-900">Informations de l'entreprise</h3>
@@ -93,7 +114,12 @@ export function B2bThematiqueStrategy({ onSuccess, playClick }: Props) {
         />
       </div>
 
-      <Button type="submit" className="w-full mt-4" size="lg">
+      <Button
+        type="submit"
+        className="w-full mt-4"
+        size="lg"
+        disabled={licence.loading || !!licence.error || !quote}
+      >
         Passer au paiement
       </Button>
     </form>

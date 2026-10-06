@@ -12,6 +12,18 @@ import { B2bPackageStrategy } from "@/components/checkout-strategies/b2b-package
 import { B2bThematiqueStrategy } from "@/components/checkout-strategies/b2b-thematique-strategy";
 import { AuctionPaymentStrategy } from "@/components/checkout-strategies/auction-payment-strategy";
 import { Button } from "@/components/ui/button";
+import type { Quote } from "@/hooks/use-licence-quote";
+
+/** Formate un montant serveur (décimal en chaîne) sans jamais le recalculer. */
+function formatAmount(amount: string, currency: string): string {
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return amount;
+  try {
+    return new Intl.NumberFormat("fr-FR", { style: "currency", currency }).format(value);
+  } catch {
+    return `${amount} ${currency}`;
+  }
+}
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -25,6 +37,10 @@ function CheckoutContent() {
   const [context, setContext] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [transaction, setTransaction] = useState<any>(null);
+  // Dernier devis serveur connu pour les offres vendues à la licence (B2B).
+  const [b2bQuote, setB2bQuote] = useState<Quote | null>(null);
+
+  const isLicenceOffer = context?.pricing?.unit === "licence";
 
   useEffect(() => {
     if (!type || !id) {
@@ -94,10 +110,10 @@ function CheckoutContent() {
 
   const renderStrategy = () => {
     if (type === "B2B_THEMATIQUE") {
-      return <B2bThematiqueStrategy playClick={() => {}} onSuccess={handleFormSuccess} />;
+      return <B2bThematiqueStrategy type="B2B_THEMATIQUE" itemId={id!} onQuoteChange={setB2bQuote} playClick={() => {}} onSuccess={handleFormSuccess} />;
     }
     if (type === "B2B_PACKAGE") {
-      return <B2bPackageStrategy playClick={() => {}} onSuccess={handleFormSuccess} />;
+      return <B2bPackageStrategy type="B2B_PACKAGE" itemId={id!} onQuoteChange={setB2bQuote} playClick={() => {}} onSuccess={handleFormSuccess} />;
     }
     if (type === "AUCTION_PAYMENT") {
       return <AuctionPaymentStrategy playClick={() => {}} onSuccess={handleFormSuccess} />;
@@ -232,17 +248,28 @@ function CheckoutContent() {
                     <Button variant="ghost" onClick={() => setStep(1)} className="text-gray-500">
                       Modifier mes infos
                     </Button>
-                    <Button 
-                      className="flex-1 bg-indigo-600 hover:bg-indigo-700" 
-                      size="lg" 
+                    <Button
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                      size="lg"
+                      disabled={!transaction?.redirectUrl}
                       onClick={() => {
-                        playSuccess();
-                        toast.success("Simulation : Redirection vers le fournisseur de paiement.");
+                        if (transaction?.redirectUrl) {
+                          window.location.assign(transaction.redirectUrl);
+                        }
                       }}
                     >
-                      Procéder au paiement ({context.price} {context.currency})
+                      Procéder au paiement (
+                      {transaction?.quote?.total
+                        ? formatAmount(transaction.quote.total, transaction.quote.currency)
+                        : `${context.price} ${context.currency}`}
+                      )
                     </Button>
                   </div>
+                  {!transaction?.redirectUrl && (
+                    <p className="text-sm text-gray-500 text-center">
+                      Le paiement en ligne n&apos;est pas encore disponible pour cette commande.
+                    </p>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -257,8 +284,17 @@ function CheckoutContent() {
             <div className="flex justify-between items-start mb-6 pb-6 border-b border-gray-100">
               <div className="pr-4">
                 <p className="font-medium text-gray-900 leading-tight">{context.title}</p>
+                {isLicenceOffer && b2bQuote && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    {b2bQuote.seats} licence{b2bQuote.seats > 1 ? "s" : ""} × {formatAmount(b2bQuote.unitPrice, b2bQuote.currency)}
+                  </p>
+                )}
               </div>
-              <span className="font-bold text-xl whitespace-nowrap">{context.price} {context.currency}</span>
+              <span className="font-bold text-xl whitespace-nowrap">
+                {isLicenceOffer && b2bQuote
+                  ? `${formatAmount(b2bQuote.unitPrice, b2bQuote.currency)} / licence`
+                  : `${context.price} ${context.currency}`}
+              </span>
             </div>
 
             {context.features && context.features.length > 0 && (
@@ -272,9 +308,22 @@ function CheckoutContent() {
               </div>
             )}
 
+            {isLicenceOffer && b2bQuote && (b2bQuote.discountLabel !== null || Number(b2bQuote.discountRate) > 0) && (
+              <div className="flex justify-between items-center text-sm text-green-600 mb-4">
+                <span>
+                  Remise{b2bQuote.discountLabel ? ` (${b2bQuote.discountLabel})` : ""}
+                </span>
+                <span>-{Math.round(Number(b2bQuote.discountRate) * 100)}%</span>
+              </div>
+            )}
+
             <div className="flex justify-between items-center pt-6 border-t border-gray-100 font-bold text-xl">
               <span>Total à payer</span>
-              <span>{context.price} {context.currency}</span>
+              <span>
+                {isLicenceOffer && b2bQuote
+                  ? formatAmount(b2bQuote.total, b2bQuote.currency)
+                  : `${context.price} ${context.currency}`}
+              </span>
             </div>
             <p className="text-xs text-gray-400 text-right mt-2 font-medium">TVA incluse si applicable</p>
           </div>

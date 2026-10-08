@@ -50,6 +50,9 @@ export function B2cCourseStrategy({ onSuccess, playClick }: Props) {
     playClick();
     onSuccess({
       buyer: { firstName: data.firstName, lastName: data.lastName, email: data.email },
+      // Champs lus par l'agrégateur : payeur (nom et e-mail) et apprenant inscrit (bénéficiaire).
+      customerEmail: data.email,
+      customerName: `${data.firstName.trim()} ${data.lastName.trim()}`,
       beneficiaryEmail: data.isForSelf ? data.email : data.beneficiaryEmail
     });
   };
@@ -57,7 +60,7 @@ export function B2cCourseStrategy({ onSuccess, playClick }: Props) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-gray-900">Pour qui achetez-vous cette formation ?</h3>
+        <h3 className="text-lg font-semibold text-gray-900">Pour qui est cette inscription ?</h3>
         
         <div className="grid grid-cols-2 gap-4">
           <button

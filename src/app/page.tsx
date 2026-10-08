@@ -29,6 +29,10 @@ function CheckoutContent() {
   const searchParams = useSearchParams();
   const type = searchParams.get("type");
   const id = searchParams.get("id");
+  // Lien d'inscription de l'auteur (ADR-0012, D14) : transmis tel quel à l'agrégateur pour une formation ; le
+  // backend métier décide seul du canal (75 %) après avoir vérifié que le lien est actif et appartient à l'auteur.
+  const rawRef = searchParams.get("ref");
+  const authorRef = rawRef && /^[A-Za-z0-9]{6,16}$/.test(rawRef) ? rawRef : null;
 
   const { isMuted, toggleMute, initAudio, playSuccess, playError } = useAudioFeedback();
 
@@ -86,7 +90,7 @@ function CheckoutContent() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ type, data: { itemId: id, ...formData } })
+        body: JSON.stringify({ type, data: { itemId: id, ...formData, ...(type === "B2C_COURSE" && authorRef ? { ref: authorRef } : {}) } })
       });
 
       if (!res.ok) {

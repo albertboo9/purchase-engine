@@ -56,9 +56,11 @@ function CheckoutContent() {
         const res = await fetch(`${aggUrl}/api/checkout/context?type=${type}&id=${id}`);
         
         if (!res.ok) {
-          throw new Error("Impossible de récupérer les détails de la commande. L'article n'existe pas ou a expiré.");
+          // La raison exacte vient du serveur (ex. formation en préparation) : on la montre telle quelle.
+          const body = await res.json().catch(() => null);
+          throw new Error(body?.message || "Impossible de récupérer les détails de la commande. L'article n'existe pas ou a expiré.");
         }
-        
+
         const json = await res.json();
         if (json.success && json.data) {
           setContext(json.data);
@@ -136,7 +138,7 @@ function CheckoutContent() {
           <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <AlertCircle className="w-8 h-8 text-red-500" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Commande introuvable</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Inscription indisponible</h2>
           <p className="text-gray-500 font-medium mb-6">{error}</p>
           <Button onClick={() => window.location.reload()} variant="outline" className="w-full">
             Réessayer

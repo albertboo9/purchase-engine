@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, Loader2, ShieldCheck, Volume2, VolumeX, AlertCircle, ShoppingCart } from "lucide-react";
+import { CheckCircle2, Loader2, ShieldCheck, Volume2, VolumeX, AlertCircle, ShoppingCart, Ticket, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAudioFeedback } from "@/hooks/use-audio-feedback";
 import { B2cCourseStrategy } from "@/components/checkout-strategies/b2c-course-strategy";
@@ -15,9 +15,9 @@ import { Button } from "@/components/ui/button";
 import type { Quote } from "@/hooks/use-licence-quote";
 
 /** Formate un montant serveur (décimal en chaîne) sans jamais le recalculer. */
-function formatAmount(amount: string, currency: string): string {
+function formatAmount(amount: string | number, currency: string): string {
   const value = Number(amount);
-  if (!Number.isFinite(value)) return amount;
+  if (!Number.isFinite(value)) return String(amount);
   try {
     return new Intl.NumberFormat("fr-FR", { style: "currency", currency }).format(value);
   } catch {
@@ -45,6 +45,42 @@ function CheckoutContent() {
   const [b2bQuote, setB2bQuote] = useState<Quote | null>(null);
 
   const isLicenceOffer = context?.pricing?.unit === "licence";
+
+  // Code promo (ADR-0012, D6 bis) : aperçu calculé par le serveur ; le montant payé est recalculé à la réservation.
+  type AppliedCoupon = { code: string; label: string | null; currency: string; listAmount: string; discountAmount: string; finalAmount: string };
+  const [couponInput, setCouponInput] = useState("");
+  const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponBusy, setCouponBusy] = useState(false);
+  const couponsEnabled = type === "B2C_COURSE";
+
+  const applyCoupon = async () => {
+    const code = couponInput.trim();
+    if (!code || couponBusy) return;
+    setCouponBusy(true);
+    setCouponError(null);
+    try {
+      const aggUrl = process.env.NEXT_PUBLIC_AGGREGATOR_URL || "http://localhost:3000";
+      const res = await fetch(`${aggUrl}/api/checkout/coupon`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, id, code }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.message || "Code impossible à vérifier.");
+      const quote = json?.data;
+      if (!quote?.valid) throw new Error(quote?.message || "Ce code ne s'applique pas.");
+      setCoupon(quote);
+      setCouponInput("");
+      playSuccess();
+    } catch (err: any) {
+      setCoupon(null);
+      setCouponError(err.message);
+      playError();
+    } finally {
+      setCouponBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (!type || !id) {
@@ -90,15 +126,28 @@ function CheckoutContent() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ type, data: { itemId: id, ...formData, ...(type === "B2C_COURSE" && authorRef ? { ref: authorRef } : {}) } })
+        body: JSON.stringify({ type, data: {
+          itemId: id,
+          ...formData,
+          ...(type === "B2C_COURSE" && authorRef ? { ref: authorRef } : {}),
+          ...(couponsEnabled && coupon ? { couponCode: coupon.code } : {}),
+        } })
       });
 
+      const json = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error("Erreur lors de l'initialisation du paiement.");
+        // Raison exacte du serveur (code expiré entre-temps, compte introuvable…).
+        if (coupon && res.status === 409) setCoupon(null);
+        throw new Error(json?.message || "Erreur lors de l'initialisation du paiement.");
       }
 
-      const json = await res.json();
-      if (json.success) {
+      if (json?.success && json.data?.status === "COMPLETED" && json.data.redirectUrl) {
+        // Inscription offerte (code à 100 %) : aucun paiement.
+        playSuccess();
+        window.location.assign(json.data.redirectUrl);
+        return;
+      }
+      if (json?.success) {
         setTransaction(json.data);
         playSuccess();
         toast.success("Informations enregistrées.", {
@@ -267,7 +316,7 @@ function CheckoutContent() {
                       Procéder au paiement (
                       {transaction?.quote?.total
                         ? formatAmount(transaction.quote.total, transaction.quote.currency)
-                        : `${context.price} ${context.currency}`}
+                        : formatAmount(coupon?.finalAmount ?? context.price, context.currency)}
                       )
                     </Button>
                   </div>
@@ -299,7 +348,7 @@ function CheckoutContent() {
               <span className="font-bold text-xl whitespace-nowrap">
                 {isLicenceOffer && b2bQuote
                   ? `${formatAmount(b2bQuote.unitPrice, b2bQuote.currency)} / licence`
-                  : `${context.price} ${context.currency}`}
+                  : formatAmount(coupon?.listAmount ?? context.price, context.currency)}
               </span>
             </div>
 
@@ -323,12 +372,51 @@ function CheckoutContent() {
               </div>
             )}
 
+            {couponsEnabled && step === 1 && (
+              <div className="mb-6">
+                {coupon ? (
+                  <div className="flex items-center justify-between rounded-2xl bg-indigo-50 px-4 py-3 text-sm">
+                    <span className="flex items-center gap-2 font-semibold text-indigo-700">
+                      <Ticket className="w-4 h-4" aria-hidden />
+                      {coupon.code}{coupon.label ? ` · ${coupon.label}` : ""}
+                    </span>
+                    <span className="flex items-center gap-3">
+                      <span className="font-semibold text-green-700">−{formatAmount(coupon.discountAmount, coupon.currency)}</span>
+                      <button type="button" onClick={() => setCoupon(null)} aria-label="Retirer le code" className="rounded-full p-1 text-gray-400 hover:bg-white hover:text-gray-700">
+                        <X className="w-4 h-4" aria-hidden />
+                      </button>
+                    </span>
+                  </div>
+                ) : (
+                  <form onSubmit={(e) => { e.preventDefault(); void applyCoupon(); }}>
+                    <label htmlFor="coupon" className="text-sm font-medium text-gray-700">Vous avez un code ?</label>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        id="coupon"
+                        value={couponInput}
+                        onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponError(null); }}
+                        maxLength={24}
+                        autoComplete="off"
+                        placeholder="Ex. RENTREE-2026"
+                        aria-invalid={!!couponError}
+                        className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm uppercase tracking-wide outline-none focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-100"
+                      />
+                      <Button type="submit" variant="outline" disabled={!couponInput.trim() || couponBusy}>
+                        {couponBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Appliquer"}
+                      </Button>
+                    </div>
+                    {couponError && <p role="alert" className="mt-2 text-sm text-rose-600">{couponError}</p>}
+                  </form>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-between items-center pt-6 border-t border-gray-100 font-bold text-xl">
               <span>Total à payer</span>
               <span>
                 {isLicenceOffer && b2bQuote
                   ? formatAmount(b2bQuote.total, b2bQuote.currency)
-                  : `${context.price} ${context.currency}`}
+                  : formatAmount(coupon?.finalAmount ?? context.price, context.currency)}
               </span>
             </div>
             <p className="text-xs text-gray-400 text-right mt-2 font-medium">TVA incluse si applicable</p>

@@ -343,6 +343,12 @@ function CheckoutContent() {
             <div className="flex justify-between items-start mb-6 pb-6 border-b border-gray-100">
               <div className="pr-4">
                 <p className="font-medium text-gray-900 leading-tight">{context.title}</p>
+                {!isLicenceOffer && context.promotion && Number(context.listPrice) > Number(context.price) && (
+                  <p className="mt-1 flex items-center gap-2 text-sm">
+                    <span className="text-gray-400 line-through">{formatAmount(context.listPrice, context.currency)}</span>
+                    <span className="rounded-full bg-[#FFF4F1] px-2 py-0.5 font-semibold text-[#E0442A]">Promotion −{context.promotion.percent} %</span>
+                  </p>
+                )}
                 {isLicenceOffer && b2bQuote && (
                   <p className="text-sm text-gray-500 mt-1">
                     {b2bQuote.seats} licence{b2bQuote.seats > 1 ? "s" : ""} × {formatAmount(b2bQuote.unitPrice, b2bQuote.currency)}

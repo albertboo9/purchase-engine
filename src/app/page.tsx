@@ -11,6 +11,7 @@ import { B2cCourseStrategy } from "@/components/checkout-strategies/b2c-course-s
 import { B2bPackageStrategy } from "@/components/checkout-strategies/b2b-package-strategy";
 import { B2bThematiqueStrategy } from "@/components/checkout-strategies/b2b-thematique-strategy";
 import { AuctionPaymentStrategy } from "@/components/checkout-strategies/auction-payment-strategy";
+import { AdmissionStrategy } from "@/components/checkout-strategies/admission-strategy";
 import { Button } from "@/components/ui/button";
 import type { Quote } from "@/hooks/use-licence-quote";
 
@@ -169,6 +170,9 @@ function CheckoutContent() {
     }
     if (type === "B2B_PACKAGE") {
       return <B2bPackageStrategy type="B2B_PACKAGE" itemId={id!} onQuoteChange={setB2bQuote} playClick={() => {}} onSuccess={handleFormSuccess} />;
+    }
+    if (type === "ADMISSION_OFFER" || type === "ADMISSION_FEE") {
+      return <AdmissionStrategy kind={type === "ADMISSION_OFFER" ? "offer" : "fee"} beneficiary={context?.beneficiary ?? null} playClick={() => {}} onSuccess={handleFormSuccess} />;
     }
     if (type === "AUCTION_PAYMENT") {
       return <AuctionPaymentStrategy playClick={() => {}} onSuccess={handleFormSuccess} />;

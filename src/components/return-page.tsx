@@ -22,7 +22,9 @@ function Content({ kind }: { kind: Kind }) {
   const id = rawId && /^\d{1,10}$/.test(rawId) ? rawId : null;
   const ref = params.get("ref") ?? "";
   const offered = ref.startsWith("COUPON-");
-  const course = type === "B2C_COURSE" && id ? `${FRONTEND}/student/formations/${id}` : `${FRONTEND}/student/formations`;
+  // Candidature (place admise, frais de dossier) : retour au dossier, ouvert dans l'espace du candidat.
+  const admission = type === "ADMISSION_OFFER" || type === "ADMISSION_FEE";
+  const course = admission && id ? `${FRONTEND}/candidatures/${id}` : type === "B2C_COURSE" && id ? `${FRONTEND}/student/formations/${id}` : `${FRONTEND}/student/formations`;
   const retry = type && id ? `/?type=${encodeURIComponent(type)}&id=${id}` : null;
 
   const copy = {
@@ -30,7 +32,11 @@ function Content({ kind }: { kind: Kind }) {
       title: offered ? "Inscription confirmée" : "Paiement reçu",
       text: offered
         ? "Votre inscription offerte est enregistrée : votre formation vous attend."
-        : "Merci ! Votre inscription est en cours de finalisation : elle apparaît dans votre espace dans quelques instants. Un e-mail de confirmation vous est envoyé.",
+        : type === "ADMISSION_FEE"
+          ? "Merci ! Vos frais de dossier sont réglés : votre candidature part à l’établissement dans quelques instants."
+          : type === "ADMISSION_OFFER"
+            ? "Merci ! Votre place est en cours de confirmation : elle apparaît dans votre dossier dans quelques instants."
+            : "Merci ! Votre inscription est en cours de finalisation : elle apparaît dans votre espace dans quelques instants. Un e-mail de confirmation vous est envoyé.",
     },
     cancel: { title: "Paiement annulé", text: "Aucun montant n’a été prélevé. Vous pouvez reprendre votre inscription quand vous le souhaitez." },
     failed: { title: "Le paiement n’a pas abouti", text: "Aucun montant n’a été prélevé. Vérifiez votre moyen de paiement ou essayez-en un autre." },
@@ -48,7 +54,7 @@ function Content({ kind }: { kind: Kind }) {
         <div className="flex flex-col gap-3">
           {ok ? (
             <Button className="w-full bg-indigo-600 hover:bg-indigo-700" size="lg" onClick={() => window.location.assign(course)}>
-              Accéder à ma formation
+              {admission ? "Retour à mon dossier" : "Accéder à ma formation"}
             </Button>
           ) : (
             retry && (

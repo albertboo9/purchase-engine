@@ -24,7 +24,6 @@ export interface UseLicenceQuoteResult {
   error: string | null;
 }
 
-const AGGREGATOR_URL = process.env.NEXT_PUBLIC_AGGREGATOR_URL || "http://localhost:3000";
 const DEBOUNCE_MS = 300;
 
 interface QuoteResult {
@@ -55,8 +54,9 @@ export function useLicenceQuote(type: string, id: string, seats: number): UseLic
 
     const timer = setTimeout(async () => {
       try {
+        // Relais serveur du purchase-engine (jamais l'agrégateur en direct).
         const res = await fetch(
-          `${AGGREGATOR_URL}/api/checkout/quote?type=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}&seats=${seats}`,
+          `/api/checkout/quote?type=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}&seats=${seats}`,
           { signal: controller.signal }
         );
         const json = await res.json().catch(() => null);

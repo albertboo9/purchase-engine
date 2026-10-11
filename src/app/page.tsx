@@ -85,7 +85,7 @@ function CheckoutContent() {
 
   useEffect(() => {
     if (!type || !id) {
-      setError("Les paramètres de la commande sont manquants (type ou id).");
+      setError("Les paramètres de l’offre sont manquants (type ou identifiant).");
       setLoading(false);
       return;
     }
@@ -99,7 +99,7 @@ function CheckoutContent() {
         if (!res.ok) {
           // La raison exacte vient du serveur (ex. formation en préparation) : on la montre telle quelle.
           const body = await res.json().catch(() => null);
-          throw new Error(body?.message || "Impossible de récupérer les détails de la commande. L'article n'existe pas ou a expiré.");
+          throw new Error(body?.message || "Impossible de récupérer cette offre : elle n’existe pas ou a expiré.");
         }
 
         const json = await res.json();
@@ -326,7 +326,7 @@ function CheckoutContent() {
                   </div>
                   {!transaction?.redirectUrl && (
                     <p className="text-sm text-gray-500 text-center">
-                      Le paiement en ligne n&apos;est pas encore disponible pour cette commande.
+                      Le paiement en ligne n&apos;est pas encore disponible pour cette offre.
                     </p>
                   )}
                 </motion.div>

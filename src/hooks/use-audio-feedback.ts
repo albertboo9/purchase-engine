@@ -1,67 +1,60 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-
 /**
- * Hook pour générer des micro-retours sonores via l'API Web Audio.
- * Cela évite de charger des MP3 et permet un contrôle ultra fin (durée, fréquence, type).
+ * Signaux sonores du checkout (ADR-0020, D1) : discrets, DÉSACTIVÉS par défaut, préférence mémorisée.
+ * Générés par le navigateur (aucun fichier) ; le navigateur n'autorise le son qu'après une interaction.
  */
+import { useCallback, useRef, useSyncExternalStore } from "react";
+
+const KEY = "sl-checkout-sound";
+
+const listeners = new Set<() => void>();
+const read = () => { try { return localStorage.getItem(KEY) === "on"; } catch { return false; } };
+const subscribe = (cb: () => void) => { listeners.add(cb); return () => listeners.delete(cb); };
+
 export function useAudioFeedback() {
-  const [isMuted, setIsMuted] = useState(false);
-  const [audioCtx, setAudioCtx] = useState<AudioContext | null>(null);
+  // Préférence partagée par toute la page (et désactivée côté serveur : aucun écart à l'hydratation).
+  const enabled = useSyncExternalStore(subscribe, read, () => false);
+  const ctxRef = useRef<AudioContext | null>(null);
 
-  // Initialisation paresseuse de l'AudioContext au premier clic pour contourner les bloqueurs de lecture auto
-  const initAudio = useCallback(() => {
-    if (!audioCtx) {
-      const Ctx = window.AudioContext || (window as any).webkitAudioContext;
-      if (Ctx) setAudioCtx(new Ctx());
+  const ensure = () => {
+    if (!ctxRef.current) {
+      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (Ctx) ctxRef.current = new Ctx();
     }
-  }, [audioCtx]);
+    return ctxRef.current;
+  };
 
-  useEffect(() => {
-    // Si l'utilisateur préfère réduire les mouvements ou désactive le son globalement côté OS, on mute par défaut
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (mediaQuery.matches) {
-      setIsMuted(true);
-    }
+  const notes = useCallback((freqs: number[], { gap = 0.09, length = 0.16, volume = 0.07, wave = "sine" as OscillatorType } = {}) => {
+    if (!enabled) return;
+    const ctx = ensure();
+    if (!ctx) return;
+    freqs.forEach((f, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = wave;
+      osc.frequency.value = f;
+      const t = ctx.currentTime + i * gap;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(volume, t + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + length);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + length + 0.02);
+    });
+  }, [enabled]);
+
+  const toggle = useCallback(() => {
+    try { localStorage.setItem(KEY, read() ? "off" : "on"); } catch { /* sans conséquence */ }
+    listeners.forEach((l) => l());
   }, []);
 
-  const playTone = useCallback((frequency: number, type: OscillatorType, duration: number, volume: number = 0.1) => {
-    if (isMuted || !audioCtx) return;
-
-    try {
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-
-      oscillator.type = type;
-      oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
-
-      gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + duration);
-    } catch (e) {
-      console.warn("Audio feedback failed", e);
-    }
-  }, [audioCtx, isMuted]);
-
   return {
-    isMuted,
-    toggleMute: () => setIsMuted((m) => !m),
-    initAudio,
-    // Sons prédéfinis très discrets
-    playClick: () => playTone(600, "sine", 0.05, 0.05),
-    playSuccess: () => {
-      playTone(400, "sine", 0.1, 0.05);
-      setTimeout(() => playTone(600, "sine", 0.15, 0.05), 100);
-    },
-    playError: () => {
-      playTone(200, "sawtooth", 0.1, 0.05);
-      setTimeout(() => playTone(150, "sawtooth", 0.2, 0.05), 100);
-    }
+    enabled,
+    toggle,
+    tap: useCallback(() => notes([660], { length: 0.06, volume: 0.04 }), [notes]),
+    success: useCallback(() => notes([523, 659, 784]), [notes]),
+    error: useCallback(() => notes([330, 262], { wave: "triangle", gap: 0.12 }), [notes]),
+    celebrate: useCallback(() => notes([523, 659, 784, 1047], { gap: 0.08, length: 0.22 }), [notes]),
   };
 }

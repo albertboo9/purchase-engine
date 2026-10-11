@@ -1,13 +1,136 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Checkout Studies Learning (ADR-0020, C1) — identité Envol de la plateforme
+ * Couleurs qui ont un sens : marque (indigo → violet), succès (menthe), danger (rouge), urgence (corail).
+ * Clair et sombre suivent le système ; chaque animation respecte « réduire les animations ».
+ */
+@theme {
+  --color-blason: #4B0082;
+  --color-nuit: #1E1B4B;
+  --color-nuit-deep: #0B0820;
+  --color-nacre: #F8F7FF;
+  --color-lavande: #E0E7FF;
+  --color-mint-50: #EFFDF6;
+  --color-mint-100: #D7F9E9;
+  --color-mint-400: #4FD19B;
+  --color-mint-500: #2DB87F;
+  --color-mint-600: #1F9D6B;
+  --color-mint-700: #1A7C57;
+  --color-coral-50: #FFF4F1;
+  --color-coral-100: #FFE4DC;
+  --color-coral-400: #FF7A59;
+  --color-coral-500: #F9573A;
+  --color-coral-600: #E3401F;
+  --color-coral-700: #BE3116;
+
+  --font-sans: var(--font-instrument), "Instrument Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-display: var(--font-literata), "Literata", Georgia, serif;
+
+  --ease-envol: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --animate-aurora: aurora 18s ease-in-out infinite alternate;
+  --animate-shimmer: shimmer 2.4s linear infinite;
+  --animate-shake: shake 0.42s var(--ease-envol);
+  --animate-pulse-ring: pulse-ring 1.8s var(--ease-envol) infinite;
+  --animate-float: float 6s ease-in-out infinite;
+
+  @keyframes aurora {
+    0% { transform: translate3d(-6%, -4%, 0) scale(1); }
+    50% { transform: translate3d(4%, 6%, 0) scale(1.08); }
+    100% { transform: translate3d(8%, -2%, 0) scale(0.96); }
+  }
+  @keyframes shimmer {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(220%); }
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-6px); }
+    40% { transform: translateX(5px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(2px); }
+  }
+  @keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.45); }
+    70% { box-shadow: 0 0 0 12px rgba(124, 58, 237, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  color-scheme: light;
+  --surface: #F8F7FF;
+  --card: rgba(255, 255, 255, 0.82);
+  --card-solid: #FFFFFF;
+  --ink: #1E1B4B;
+  --ink-soft: #4B4A6B;
+  --ink-muted: #7A7896;
+  --line: rgba(30, 27, 75, 0.09);
+  --field: #FFFFFF;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --surface: #0B0820;
+    --card: rgba(23, 19, 58, 0.72);
+    --card-solid: #161236;
+    --ink: #F4F2FF;
+    --ink-soft: #C9C5EA;
+    --ink-muted: #8F8AB8;
+    --line: rgba(199, 196, 255, 0.12);
+    --field: rgba(255, 255, 255, 0.04);
+  }
+}
+
+html, body {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: rgba(124, 58, 237, 0.22); }
+
+/* Composants de base */
+/* Carte en utilitaire : utilisable avec les variantes (ex. lg:card pour le panneau d'étapes). */
+@utility card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: 0 24px 60px -32px rgba(30, 27, 75, 0.35);
+}
+
+@layer components {
+  .field {
+    width: 100%;
+    border-radius: 16px;
+    background: var(--field);
+    border: 1px solid var(--line);
+    padding: 0.78rem 1rem;
+    font-size: 15px;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.25s var(--ease-envol), background 0.2s;
+  }
+  .field::placeholder { color: var(--ink-muted); }
+  .field:focus { border-color: #8B5CF6; box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.16); }
+  .field[aria-invalid="true"] { border-color: #E11D48; box-shadow: 0 0 0 4px rgba(225, 29, 72, 0.12); }
+  .label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-soft); margin-bottom: 0.4rem; }
+  .text-soft { color: var(--ink-soft); }
+  .text-muted { color: var(--ink-muted); }
+  .hairline { border-color: var(--line); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }

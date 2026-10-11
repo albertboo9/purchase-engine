@@ -50,6 +50,8 @@ export interface PurchaseStatus {
   reference: string;
   state: "pending" | "confirmed" | "delivered" | "failed";
   kind: "enrollment" | "licences" | "admission";
+  /** Motif d'échec rédigé pour l'acheteur (jamais la réponse brute du prestataire). */
+  reason: { category: string; title: string; advice: string } | null;
   title: string | null;
   amount: number;
   currency: string;

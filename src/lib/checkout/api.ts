@@ -46,3 +46,10 @@ export function sessionKey(scope: string): string {
 export function forgetSessionKey(scope: string) {
   try { sessionStorage.removeItem(`sl-checkout:${scope}`); } catch { /* sans conséquence */ }
 }
+
+/** Fin d'un essai de paiement (retour du prestataire) : le prochain essai doit créer un nouveau paiement. */
+export function forgetAllSessionKeys() {
+  try {
+    for (const k of Object.keys(sessionStorage)) if (k.startsWith("sl-checkout:")) sessionStorage.removeItem(k);
+  } catch { /* sans conséquence */ }
+}

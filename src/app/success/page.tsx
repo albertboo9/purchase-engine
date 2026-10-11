@@ -1,4 +1,4 @@
-import { ReturnPage } from "@/components/return-page";
+import { ReturnPage } from "@/components/checkout/Return";
 
 export default function Page() {
   return <ReturnPage kind="success" />;

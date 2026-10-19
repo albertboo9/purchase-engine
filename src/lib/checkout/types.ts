@@ -21,7 +21,9 @@ export interface CheckoutContext {
   beneficiary?: { email: string; name?: string | null } | null;
   pricing?: { unit: "licence"; basePrice: string | number; volumeDiscounts: boolean } | null;
   totalDuration?: string | number | null;
-  auctionDetails?: { auctionId: number; itemTitle: string; deadline?: string | null } | null;
+  /** Enchère remportée (ADR-0021) : rang de l'invitation, formation, échéance des 48 h. */
+  auction?: { rank: number; formationId: number; expiresAt: string } | null;
+  deadline?: string | null;
 }
 
 export interface Quote {
@@ -52,6 +54,8 @@ export interface PurchaseStatus {
   kind: "enrollment" | "licences" | "admission";
   /** Motif d'échec rédigé pour l'acheteur (jamais la réponse brute du prestataire). */
   reason: { category: string; title: string; advice: string } | null;
+  /** Formation concernée (inscription, enchère) : la page de retour y mène directement. */
+  formationId?: number | null;
   title: string | null;
   amount: number;
   currency: string;

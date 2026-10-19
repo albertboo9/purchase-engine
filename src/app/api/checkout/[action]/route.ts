@@ -31,7 +31,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ acti
   const { action } = await params;
   if (!GET_ACTIONS.has(action)) return NextResponse.json({ success: false, message: "Action inconnue." }, { status: 404 });
   const url = `${AGGREGATOR}/api/checkout/${action}${req.nextUrl.search}`;
-  const ttl = CACHE_TTL[action];
+  // Une invitation d'enchère change d'état (payée, échue) : jamais de cache quand le lien porte un jeton.
+  const ttl = req.nextUrl.searchParams.has("claim") ? 0 : CACHE_TTL[action];
   const hit = ttl ? cache.get(url) : undefined;
   if (hit && Date.now() - hit.at < ttl) return NextResponse.json(hit.body, { status: hit.status, headers: { "X-Cache": "hit" } });
   try {

@@ -138,6 +138,7 @@ function Content({ kind }: { kind: Kind }) {
 
   const destination = nature === "licences" ? B2B
     : nature === "admission" ? (id ? `${FRONTEND}/candidatures/${id}` : `${FRONTEND}/candidatures`)
+    : status?.formationId ? `${FRONTEND}/student/formations/${status.formationId}`
     : type === "B2C_COURSE" && id ? `${FRONTEND}/student/formations/${id}` : `${FRONTEND}/student/formations`;
   const retry = type && id ? `/?type=${encodeURIComponent(type)}&id=${id}` : null;
   const back = nature === "licences" ? B2B : `${FRONTEND}/formations`;

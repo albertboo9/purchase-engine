@@ -11,7 +11,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Building2, Gift, User } from "lucide-react";
+import { Building2, Gavel, Gift, User } from "lucide-react";
 import { toast } from "sonner";
 import { Aurora, CheckoutHeader } from "@/components/brand/Brand";
 import { Field, PayButton, Segmented, Pill } from "@/components/checkout/primitives";
@@ -45,6 +45,9 @@ function Checkout({ sound }: { sound: ReturnType<typeof useAudioFeedback> }) {
   const returnUrl = safeReturn(params.get("return"));
   const rawRef = params.get("ref");
   const authorRef = rawRef && /^[A-Za-z0-9]{6,16}$/.test(rawRef) ? rawRef : null;
+  // Enchère remportée : jeton de l'invitation reçu par e-mail (ADR-0021, D4).
+  const rawClaim = params.get("claim");
+  const claim = rawClaim && /^[A-Za-z0-9_-]{32,64}$/.test(rawClaim) ? rawClaim : null;
   const type: PurchaseType | null = isPurchaseType(rawType) ? rawType : null;
 
   const [reload, setReload] = useState(0);
@@ -82,6 +85,8 @@ function Checkout({ sound }: { sound: ReturnType<typeof useAudioFeedback> }) {
   const formRef = useRef<HTMLFormElement>(null);
 
   const isLicence = type === "B2B_PACKAGE" || type === "B2B_THEMATIQUE";
+  // Enchère : la personne est connue par l'invitation, il ne reste qu'à payer (une seule étape).
+  const isAuction = type === "AUCTION_PAYMENT";
   const licenceQuote = useLicenceQuote(type ?? "", id, isLicence ? seats : 1);
   const quote = isLicence ? licenceQuote.quote : null;
 
@@ -89,14 +94,14 @@ function Checkout({ sound }: { sound: ReturnType<typeof useAudioFeedback> }) {
   useEffect(() => {
     if (!type || !id) return;
     let alive = true;
-    checkoutApi.context(type, id)
+    checkoutApi.context(type, id, claim)
       .then((c) => { if (!alive) return; setLoaded({ key: offerKey, ctx: { ...c, type } }); setCountry(guessCountry(c.currency)); if (c.beneficiary?.email) setEmail(c.beneficiary.email);
         // Place nominative : l'identité est déjà connue, on la reprend (modifiable) au lieu de la redemander.
         const [first, ...rest] = (c.beneficiary?.name ?? "").trim().split(/\s+/);
         if (first && rest.length) { setFirstName(first); setLastName(rest.join(" ")); } })
       .catch((e: CheckoutError) => alive && setLoaded({ key: offerKey, error: e.message }));
     return () => { alive = false; };
-  }, [type, id, offerKey]);
+  }, [type, id, offerKey, claim]);
 
   // Total : devis (licences), code (aperçu serveur), sinon prix de l'offre
   const total = useMemo(() => {
@@ -148,11 +153,11 @@ function Checkout({ sound }: { sound: ReturnType<typeof useAudioFeedback> }) {
     }
   }, [type, id, couponBusy, sound]);
 
-  const steps: StepDef[] = useMemo(() => [
+  const steps: StepDef[] = useMemo(() => isAuction ? [{ id: "payment", label: "Paiement" }] : [
     ...(isLicence ? [{ id: "licences", label: "Licences" }] : []),
     { id: "identity", label: isLicence ? "Entreprise" : type === "B2C_COURSE" && !forSelf ? "Destinataire" : "Vous" },
     { id: "payment", label: "Paiement" },
-  ], [isLicence, type, forSelf]);
+  ], [isAuction, isLicence, type, forSelf]);
   const stepIndex = Math.min(nav.index, steps.length - 1);
   const stepId = steps[stepIndex].id;
   const isLast = stepIndex === steps.length - 1;
@@ -214,7 +219,9 @@ function Checkout({ sound }: { sound: ReturnType<typeof useAudioFeedback> }) {
       ? { ...base, companyName: companyName.trim(), vatNumber: vatNumber.trim() || undefined, adminFirstName: firstName.trim(), adminLastName: lastName.trim(), adminEmail: email.trim(), totalLicenses: quote?.seats ?? seats }
       : type === "B2C_COURSE"
         ? { ...base, customerEmail: email.trim(), customerName: name, beneficiaryEmail: forSelf ? email.trim() : beneficiaryEmail.trim(), ...(authorRef ? { ref: authorRef } : {}), ...(coupon ? { couponCode: coupon.code } : {}) }
-        : { ...base, customerEmail: email.trim(), customerName: name };
+        : isAuction
+          ? { ...base, claim }
+          : { ...base, customerEmail: email.trim(), customerName: name };
     // Une clé par session ET par choix (moyen, pays, licences, code) : changer d'avis crée un nouveau paiement.
     data.idempotencyKey = sessionKey([type, id, method, country, isLicence ? quote?.seats : "", coupon?.code ?? ""].join(":"));
     try {
@@ -289,12 +296,16 @@ function Checkout({ sound }: { sound: ReturnType<typeof useAudioFeedback> }) {
         return (
           <>
             <StepHeading title="Comment souhaitez-vous payer ?" hint="Le moyen le plus simple dans votre pays est présélectionné." />
+            {isAuction ? (
+              <Recap icon={<Gavel size={16} />} title={ctx.beneficiary?.name || "Inscription"} detail={ctx.beneficiary?.email} />
+            ) : (
             <Recap
               icon={isLicence ? <Building2 size={16} /> : type === "B2C_COURSE" && !forSelf ? <Gift size={16} /> : initials}
               title={isLicence ? `${companyName.trim()} · ${quote?.seats ?? seats} licence${(quote?.seats ?? seats) > 1 ? "s" : ""}` : type === "B2C_COURSE" && !forSelf ? `Offert à ${beneficiaryEmail.trim()}` : fullName}
               detail={isLicence ? `${fullName} · ${email.trim()}` : type === "B2C_COURSE" && !forSelf ? `De ${fullName} · ${email.trim()}` : email.trim()}
               onEdit={() => goTo(identityIndex)}
             />
+            )}
             <PaymentMethods country={country} onCountry={(c) => { sound.tap(); setCountry(c); }} methods={methods} loading={methodsLoading} value={method} onChange={(m) => { sound.tap(); setMethod(m); }} hints={copy.methodHint} />
           </>
         );
@@ -316,7 +327,7 @@ function Checkout({ sound }: { sound: ReturnType<typeof useAudioFeedback> }) {
               <h1 className="mt-2.5 line-clamp-2 font-display text-[26px] font-semibold leading-[1.15] tracking-tight [@media(min-height:860px)]:text-[30px]">{copy.title}</h1>
               <p className="mt-2 line-clamp-2 hidden max-w-xl text-[14.5px] leading-relaxed text-soft [@media(min-height:820px)]:block">{copy.lead}</p>
             </div>
-            <Stepper steps={steps} current={stepIndex} onJump={goTo} />
+            {steps.length > 1 && <Stepper steps={steps} current={stepIndex} onJump={goTo} />}
           </motion.div>
 
           {/* Étape courante : conçue pour tenir dans l'écran ; défilement interne seulement sur très petit écran. */}

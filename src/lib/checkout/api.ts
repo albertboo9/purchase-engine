@@ -18,7 +18,7 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const checkoutApi = {
-  context: (type: PurchaseType, id: string) => call<CheckoutContext>(`context?type=${type}&id=${encodeURIComponent(id)}`),
+  context: (type: PurchaseType, id: string, claim?: string | null) => call<CheckoutContext>(`context?type=${type}&id=${encodeURIComponent(id)}${claim ? `&claim=${encodeURIComponent(claim)}` : ""}`),
   quote: (type: PurchaseType, id: string, seats: number, signal?: AbortSignal) => call<Quote>(`quote?type=${type}&id=${encodeURIComponent(id)}&seats=${seats}`, { signal }),
   methods: (currency: string, country: string, amount: number) => call<{ methods: MethodAvailability[] }>(`methods?currency=${currency}&country=${country}&amount=${Math.max(1, Math.round(amount))}`),
   coupon: (type: PurchaseType, id: string, code: string) => call<AppliedCoupon & { valid: boolean; message?: string }>("coupon", { method: "POST", body: JSON.stringify({ type, id, code }) }),

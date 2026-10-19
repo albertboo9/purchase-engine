@@ -119,7 +119,7 @@ export function Summary({ ctx, copy, quote, coupon, total, couponSlot }: {
         <div>
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <Pill>{copy.eyebrow}</Pill>
-            <AnimatePresence>{copy.badge && <motion.span key={copy.badge} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}><Pill tone={copy.badge.startsWith("À régler") ? "coral" : "mint"}><Sparkles size={12} />{copy.badge}</Pill></motion.span>}</AnimatePresence>
+            <AnimatePresence>{copy.badge && <motion.span key={copy.badge} initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}><Pill tone={/^À (régler|finaliser)/.test(copy.badge) ? "coral" : "mint"}><Sparkles size={12} />{copy.badge}</Pill></motion.span>}</AnimatePresence>
           </div>
           <h3 className="line-clamp-2 font-display text-[19px] font-semibold leading-snug">{ctx.title}</h3>
           {ctx.subtitle && <p className="mt-1 text-[13.5px] text-muted">{ctx.subtitle}</p>}

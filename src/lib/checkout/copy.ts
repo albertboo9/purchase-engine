@@ -131,18 +131,21 @@ export function checkoutCopy(input: CopyInput): CheckoutCopy {
         legal: "Les frais de dossier rémunèrent l’étude de votre candidature : ils ne sont pas remboursables, quelle que soit la décision.",
       };
     case "AUCTION_PAYMENT": {
-      const left = relativeDeadline(ctx.auctionDetails?.deadline, now);
+      const left = relativeDeadline(ctx.auction?.expiresAt ?? ctx.deadline, now);
+      const winner = (ctx.auction?.rank ?? 1) === 1;
       return {
         ...common,
-        eyebrow: EYEBROW.AUCTION_PAYMENT,
-        title: "Félicitations, l’enchère est à vous",
-        lead: `Vous avez remporté « ${ctx.auctionDetails?.itemTitle ?? ctx.title} ». Réglez votre enchère pour recevoir vos accès.`,
-        identityTitle: "Vos coordonnées",
-        identityHint: "L’accès est attribué au compte qui a remporté l’enchère.",
-        cta: `Régler mon enchère · ${amount}`,
+        eyebrow: winner ? EYEBROW.AUCTION_PAYMENT : "Une place vous revient",
+        title: winner ? `La place dans « ${ctx.title} » est à vous` : `Votre place dans « ${ctx.title} »`,
+        lead: winner
+          ? `Vous avez remporté l’enchère. Finalisez votre inscription${left ? ` dans les ${left} qui restent` : ""} pour ouvrir votre accès au campus.`
+          : `Le gagnant n’a pas finalisé : la place vous revient au montant de votre dernière offre${left ? `, pendant encore ${left}` : ""}.`,
+        identityTitle: "Votre inscription",
+        identityHint: "La place est attribuée à la personne qui a remporté l’enchère.",
+        cta: `Finaliser mon inscription · ${amount}`,
         ctaBusy: "Préparation du paiement sécurisé…",
-        badge: left ? `À régler dans ${left}` : null,
-        legal: "Passé le délai, l’enchère est proposée à l’enchérisseur suivant. Les enchères réglées ne sont pas remboursables.",
+        badge: left ? `À finaliser dans ${left}` : null,
+        legal: "Sans finalisation dans le délai, la place est proposée à l’enchérisseur suivant. Les inscriptions ne sont pas remboursables.",
       };
     }
   }

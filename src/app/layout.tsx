@@ -19,6 +19,8 @@ export const metadata: Metadata = {
   description: "Finalisez votre inscription ou votre achat de licences Studies Learning en toute sécurité.",
   icons: { icon: "/brand/monogram-violet-32.png", apple: "/brand/app-violet-180.png" },
   robots: { index: false, follow: false },
+  // Les liens d'enchère portent un jeton : jamais transmis aux sites du prestataire (seule l'origine part).
+  referrer: "strict-origin-when-cross-origin",
 };
 
 export const viewport: Viewport = {

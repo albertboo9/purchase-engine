@@ -115,7 +115,7 @@ export function BackButton({ onClick }: { onClick: () => void }) {
 }
 
 /** Rappel compact d'une étape franchie, avec retour direct pour la modifier. */
-export function Recap({ icon, title, detail, onEdit }: { icon: ReactNode; title: string; detail?: string; onEdit: () => void }) {
+export function Recap({ icon, title, detail, onEdit }: { icon: ReactNode; title: string; detail?: string; onEdit?: () => void }) {
   return (
     <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: EASE }} className="mb-4 flex items-center gap-3 rounded-2xl border border-[var(--line)] bg-[var(--field)] px-3.5 py-2.5">
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-[13px] font-bold text-white">{icon}</span>
@@ -123,9 +123,11 @@ export function Recap({ icon, title, detail, onEdit }: { icon: ReactNode; title:
         <span className="block truncate text-[13.5px] font-semibold">{title}</span>
         {detail && <span className="block truncate text-[12px] text-muted">{detail}</span>}
       </span>
-      <button type="button" onClick={onEdit} className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12.5px] font-semibold text-violet-700 transition hover:bg-violet-100 dark:text-violet-300 dark:hover:bg-violet-500/15">
-        <PencilLine size={13} />Modifier
-      </button>
+      {onEdit && (
+        <button type="button" onClick={onEdit} className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12.5px] font-semibold text-violet-700 transition hover:bg-violet-100 dark:text-violet-300 dark:hover:bg-violet-500/15">
+          <PencilLine size={13} />Modifier
+        </button>
+      )}
     </motion.div>
   );
 }

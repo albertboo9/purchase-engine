@@ -20,6 +20,8 @@ import { CouponField, Summary } from "@/components/checkout/Summary";
 import { PaymentMethods } from "@/components/checkout/PaymentMethods";
 import { Licences } from "@/components/checkout/Licences";
 import { CheckoutSkeleton, RedirectVeil, Unavailable } from "@/components/checkout/States";
+import { WaitingRoom } from "@/components/checkout/WaitingRoom";
+import { useQueue } from "@/hooks/use-queue";
 import { useAudioFeedback } from "@/hooks/use-audio-feedback";
 import { useLicenceQuote } from "@/hooks/use-licence-quote";
 import { checkoutApi, CheckoutError, sessionKey } from "@/lib/checkout/api";
@@ -366,11 +368,19 @@ function Checkout({ sound }: { sound: ReturnType<typeof useAudioFeedback> }) {
 function Page() {
   const sound = useAudioFeedback();
   const params = useSearchParams();
+  // Salle d'attente (ADR-0021, C5) : invisible sous le seuil ; une fois admis, le checkout reste monté et la salle
+  // repasse par-dessus si une nouvelle place est demandée (rien de ce qui est saisi n'est perdu).
+  const queue = useQueue();
+  const [everAdmitted, setEverAdmitted] = useState(false);
+  if (queue.state === "admitted" && !everAdmitted) setEverAdmitted(true);
   return (
     <div className="relative flex h-dvh flex-col overflow-hidden">
       <Aurora />
       <CheckoutHeader soundOn={sound.enabled} onToggleSound={sound.toggle} returnUrl={safeReturn(params.get("return"))} />
-      <Checkout sound={sound} />
+      {everAdmitted ? <Checkout sound={sound} /> : queue.state === "waiting" ? <WaitingRoom position={queue.position} etaSec={queue.etaSec} firstPosition={queue.firstPosition} /> : <CheckoutSkeleton />}
+      {everAdmitted && queue.state === "waiting" && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-[var(--surface)]/90 pt-20 backdrop-blur-xl"><WaitingRoom position={queue.position} etaSec={queue.etaSec} firstPosition={queue.firstPosition} /></div>
+      )}
     </div>
   );
 }

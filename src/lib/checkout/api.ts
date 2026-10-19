@@ -13,6 +13,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
     throw new CheckoutError("Connexion interrompue. Vérifiez votre réseau puis réessayez.");
   }
   const body = await res.json().catch(() => null);
+  // Pic d'affluence : le serveur réclame une place dans la file ; la page bascule vers la salle d'attente.
+  if (res.status === 428 && body?.code === "QUEUE_REQUIRED" && typeof window !== "undefined") window.dispatchEvent(new Event("sl:queue-required"));
   if (!res.ok || body?.success === false) throw new CheckoutError(body?.message || "Une erreur est survenue. Réessayez.", res.status);
   return body?.data as T;
 }
